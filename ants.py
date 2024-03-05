@@ -5,11 +5,22 @@ import numpy as np
 import maze
 import pheromone
 import direction as d
+# import os
+# os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame as pg
 
 UNLOADED, LOADED = False, True
 
 exploration_coefs = 0.
+
+from mpi4py import MPI
+
+# global communication
+globCom = MPI.COMM_WORLD.Dup()
+# number of processes
+nbp     = globCom.size
+# identifier for each process
+rank    = globCom.rank
 
 
 class Colony:
@@ -211,24 +222,44 @@ class Colony:
     def display(self, screen):
         [screen.blit(self.sprites[self.directions[i]], (8*self.historic_path[i, self.age[i], 1], 8*self.historic_path[i, self.age[i], 0])) for i in range(self.directions.shape[0])]
 
+def getColor_sent_pheromon(i: int, j: int, pheromon):
+    val = max(min(pheromon[i, j], 1), 0)
+    return [255*(val > 1.E-16), 255*val, 128.]
+
+def display_sent_pheromon(pheromon, screen):
+        [[screen.fill(getColor_sent_pheromon(i, j, pheromon), (8*(j-1), 8*(i-1), 8, 8)) for j in range(1, pheromon.shape[1]-1)] for i in range(1, pheromon.shape[0]-1)]
+
 
 if __name__ == "__main__":
+
+    if(nbp != 2):
+        print("Select two processes for this exercice.")
+        exit(1)
+
     import sys
     import time
-    pg.init()
+    if(rank == 0):
+        pg.init()
     size_laby = 25, 25
     if len(sys.argv) > 2:
         size_laby = int(sys.argv[1]),int(sys.argv[2])
 
     resolution = size_laby[1]*8, size_laby[0]*8
+    
+    # if(rank == 0):
     screen = pg.display.set_mode(resolution)
+
     nb_ants = size_laby[0]*size_laby[1]//4
     max_life = 500
+
     if len(sys.argv) > 3:
         max_life = int(sys.argv[3])
     pos_food = size_laby[0]-1, size_laby[1]-1
     pos_nest = 0, 0
-    a_maze = maze.Maze(size_laby, 12345)
+
+
+    a_maze = maze.Maze(size_laby, 12345)  # 0, 1
+
     ants = Colony(nb_ants, pos_nest, max_life)
     unloaded_ants = np.array(range(nb_ants))
     alpha = 0.9
@@ -237,29 +268,39 @@ if __name__ == "__main__":
         alpha = float(sys.argv[4])
     if len(sys.argv) > 5:
         beta = float(sys.argv[5])
-    pherom = pheromone.Pheromon(size_laby, pos_food, alpha, beta)
-    mazeImg = a_maze.display()
+    if(rank == 1):
+        pherom = pheromone.Pheromon(size_laby, pos_food, alpha, beta)
+    if(rank == 0):
+        mazeImg = a_maze.display()
+        pherom = np.zeros((size_laby[0]+2, size_laby[1]+2), dtype=np.double)
     food_counter = 0
     
 
     snapshop_taken = False
     while True:
-        for event in pg.event.get():
-            if event.type == pg.QUIT:
-                pg.quit()
-                exit(0)
+        if(rank == 0):
+            for event in pg.event.get():
+                if event.type == pg.QUIT:
+                    pg.quit()
+                    exit(0)
+            pherom = globCom.recv(source=1)
+            deb = time.time()
+            display_sent_pheromon(pherom, screen)
+            screen.blit(mazeImg, (0, 0))
+            ants.display(screen)
+            pg.display.update()
+            end = time.time()
+            print(f"Affichage: FPS : {1./(end-deb):6.2f}, nourriture : {food_counter:7d}", end='\r')
+            food_counter = globCom.recv(source=1)
+            if food_counter == 1 and not snapshop_taken:
+                pg.image.save(screen, "MyFirstFood.png")
+                snapshop_taken = True
 
-        deb = time.time()
-        pherom.display(screen)
-        screen.blit(mazeImg, (0, 0))
-        ants.display(screen)
-        pg.display.update()
                 
-        food_counter = ants.advance(a_maze, pos_food, pos_nest, pherom, food_counter)
-        pherom.do_evaporation(pos_food)
-        end = time.time()
-        if food_counter == 1 and not snapshop_taken:
-            pg.image.save(screen, "MyFirstFood.png")
-            snapshop_taken = True
+        elif(rank == 1):
+            globCom.send(pherom.pheromon, dest=0)
+            food_counter = ants.advance(a_maze, pos_food, pos_nest, pherom, food_counter)
+            globCom.send(food_counter, dest=0)
+            pherom.do_evaporation(pos_food)
+        
         # pg.time.wait(500)
-        print(f"FPS : {1./(end-deb):6.2f}, nourriture : {food_counter:7d}", end='\r')
