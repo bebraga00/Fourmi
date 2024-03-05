@@ -52,9 +52,10 @@ class Colony:
         # Direction in which the ant is currently facing (depends on the direction it came from).
         self.directions = d.DIR_NONE*np.ones(nb_ants, dtype=np.int8)
         self.sprites = []
-        img = pg.image.load("ants.png").convert_alpha()
-        for i in range(0, 32, 8):
-            self.sprites.append(pg.Surface.subsurface(img, i, 0, 8, 8))
+        if(rank == 0):
+            img = pg.image.load("ants.png").convert_alpha()
+            for i in range(0, 32, 8):
+                self.sprites.append(pg.Surface.subsurface(img, i, 0, 8, 8))
 
     def return_to_nest(self, loaded_ants, pos_nest, food_counter):
         """
@@ -246,8 +247,8 @@ if __name__ == "__main__":
 
     resolution = size_laby[1]*8, size_laby[0]*8
     
-    # if(rank == 0):
-    screen = pg.display.set_mode(resolution)
+    if(rank == 0):
+        screen = pg.display.set_mode(resolution)
 
     nb_ants = size_laby[0]*size_laby[1]//4
     max_life = 500
@@ -258,7 +259,7 @@ if __name__ == "__main__":
     pos_nest = 0, 0
 
 
-    a_maze = maze.Maze(size_laby, 12345)  # 0, 1
+    a_maze = maze.Maze(size_laby, 12345, rank)  # 0, 1
 
     ants = Colony(nb_ants, pos_nest, max_life)
     unloaded_ants = np.array(range(nb_ants))

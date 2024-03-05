@@ -19,7 +19,7 @@ class Maze:
         dimensions: Tuple containing two integers describing the height and length of the maze.
         seed: The random seed used to generate the maze. The same seed produces the same maze.
     """
-    def __init__(self, dimensions, seed):
+    def __init__(self, dimensions, seed, rank):
 
         self.cases_img = []
         self.maze  = np.zeros(dimensions, dtype=np.int8)
@@ -62,9 +62,10 @@ class Maze:
             else:
                 historic.pop()
         #  Load patterns for maze display :
-        img = pg.image.load("cases.png").convert_alpha()
-        for i in range(0, 128, 8):
-            self.cases_img.append(pg.Surface.subsurface(img, i, 0, 8, 8))
+        if(rank == 0):
+            img = pg.image.load("cases.png").convert_alpha()
+            for i in range(0, 128, 8):
+                self.cases_img.append(pg.Surface.subsurface(img, i, 0, 8, 8))
 
     def display(self):
         """
@@ -78,25 +79,25 @@ class Maze:
         return maze_img
 
 
-if __name__  == "__main__":
-    import time
-    dimensions = (50, 80)
-    pg.init()
-    resolution = dimensions[1]*8, dimensions[0]*8
-    print(f"resolution : {resolution}")
-    screen = pg.display.set_mode(resolution)
+# if __name__  == "__main__":
+#     import time
+#     dimensions = (50, 80)
+#     pg.init()
+#     resolution = dimensions[1]*8, dimensions[0]*8
+#     print(f"resolution : {resolution}")
+#     screen = pg.display.set_mode(resolution)
 
-    t1 = time.time()
-    maze = Maze(dimensions, 12345)
-    t2 = time.time()
-    print(f"Temps construction labyrinthe : {t2-t1} secondes")
+#     t1 = time.time()
+#     maze = Maze(dimensions, 12345)
+#     t2 = time.time()
+#     print(f"Temps construction labyrinthe : {t2-t1} secondes")
 
-    screen.fill((255, 255, 255))
-    mazeImg = maze.display()
-    screen.blit(mazeImg, (0, 0))
-    pg.display.update()
+#     screen.fill((255, 255, 255))
+#     mazeImg = maze.display()
+#     screen.blit(mazeImg, (0, 0))
+#     pg.display.update()
 
-    while True:
-        for event in pg.event.get():
-            if event.type == pg.QUIT:
-                pg.quit()
+#     while True:
+#         for event in pg.event.get():
+#             if event.type == pg.QUIT:
+#                 pg.quit()
