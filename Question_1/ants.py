@@ -224,11 +224,10 @@ class Colony:
     #     [screen.blit(self.sprites[self.directions[i]], (8*self.historic_path[i, self.age[i], 1], 8*self.historic_path[i, self.age[i], 0])) for i in range(self.directions.shape[0])]
 
 # functions that replace the object methods
-def getColor_sent_pheromon(i: int, j: int, pheromon):
-    val = max(min(pheromon[i, j], 1), 0)
-    return [255*(val > 1.E-16), 255*val, 128.]
-
 if(rank == 0):
+    def getColor_sent_pheromon(i: int, j: int, pheromon):
+        val = max(min(pheromon[i, j], 1), 0)
+        return [255*(val > 1.E-16), 255*val, 128.]
     def display_sent_pheromon(pheromon, screen):
             [[screen.fill(getColor_sent_pheromon(i, j, pheromon), (8*(j-1), 8*(i-1), 8, 8)) for j in range(1, pheromon.shape[1]-1)] for i in range(1, pheromon.shape[0]-1)]
 
@@ -253,7 +252,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 2:
         size_laby = int(sys.argv[1]),int(sys.argv[2])
     
-    food_counter = 0
+    
 
     if(rank == 0):
         pg.init()
@@ -292,6 +291,7 @@ if __name__ == "__main__":
             
         pherom = pheromone.Pheromon(size_laby, pos_food, alpha, beta)
         end_process = False
+        food_counter = 0
 
     while True:
         if(rank == 0):

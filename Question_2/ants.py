@@ -262,6 +262,7 @@ if __name__ == "__main__":
     nb_ants_total = 120
     nb_ants = nb_ants_total // (nbp - 1) # AJOUT
     max_life = 500
+    pos_food = size_laby[0]-1, size_laby[1]-1
 
     if(rank == 0):
         mazeImg = a_maze.display(rank)
@@ -292,9 +293,9 @@ if __name__ == "__main__":
         end_process = False
         food_counter = 0
     
-        pos_food = size_laby[0]-1, size_laby[1]-1
+        # pos_food = size_laby[0]-1, size_laby[1]-1
         alpha = 0.9 
-        beta  = 0.95
+        beta  = 0.99
         pherom = pheromone.Pheromon(size_laby, pos_food, alpha, beta)
 
     # 
@@ -310,7 +311,7 @@ if __name__ == "__main__":
             deb = time.time()
 
             total_food_found = 0
-            pherom = np.zeros((size_laby[0]+2, size_laby[1]+2), dtype=np.double)
+            # sent_pheromon = np.zeros((size_laby[0]+2, size_laby[1]+2), dtype=np.double)
             for i in range(nbp - 1):
                 received = globCom.recv(source=(i + 1))
                 if(i == 0):
@@ -324,9 +325,10 @@ if __name__ == "__main__":
                     historic_path_concatenated = np.concatenate((historic_path_concatenated, received[2]), axis=0)
                     age_concatenated = np.concatenate((age_concatenated, received[3]))
                 total_food_found += received[4]
+
+            sent_pheromon = sent_pheromon / np.max(sent_pheromon)
+            sent_pheromon[pos_food[0] + 1][pos_food[1] + 1] = 1
             
-            # pherom.pheromon = sent_pheromon
-            # pherom.do_evaporation(pos_food)
             display_sent_pheromon(sent_pheromon, screen) #CHANGER
             screen.blit(mazeImg, (0, 0))
             display_sent_ants(screen, sprites, directions_concatenated, historic_path_concatenated, age_concatenated)
@@ -342,26 +344,23 @@ if __name__ == "__main__":
                 found_first_food = time.time()
                 pg.image.save(screen, "MyFirstFood.png")
                 snapshop_taken = True
-                print("Total time to find the first food:", found_first_food - deb_total)
-                # end_all_processes()
             
-            # if total_food_found > 1000:
-            #     end_total = time.time()
-            #     print("Total time to find the first food:", found_first_food - deb_total)
-            #     print("Total time to find 1000 food:", end_total - deb_total)
-            #     end_all_processes()
+            if total_food_found > 1000:
+                end_total = time.time()
+                print("Total time to find the first food:", found_first_food - deb_total)
+                print("Total time to find 1000 food:", end_total - deb_total)
+                end_all_processes()
 
         elif(rank != 0):
             end_process = globCom.recv(source=0, tag=0)
             if(end_process):
                 exit(0)
             
-            food_counter = ants.advance(a_maze, pos_food, pos_nest, pherom, food_counter)            
+            food_counter = ants.advance(a_maze, pos_food, pos_nest, pherom, food_counter)   
+            pherom.do_evaporation(pos_food)         
             send_nd_array = np.array((pherom.pheromon, ants.directions, ants.historic_path, ants.age, food_counter), dtype=object)
-            pherom.do_evaporation(pos_food)
             globCom.send(send_nd_array, dest=0)
-
             pherom.pheromon = globCom.recv(source=0, tag=1)
-
+            
 
         # pg.time.wait(50)
