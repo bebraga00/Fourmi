@@ -5,22 +5,11 @@ import numpy as np
 import maze
 import pheromone
 import direction as d
-# import os
-# os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame as pg
 
 UNLOADED, LOADED = False, True
 
 exploration_coefs = 0.
-
-from mpi4py import MPI
-
-# global communication
-globCom = MPI.COMM_WORLD.Dup()
-# number of processes
-nbp     = globCom.size
-# identifier for each process
-rank    = globCom.rank
 
 
 class Colony:
@@ -51,11 +40,10 @@ class Colony:
         self.historic_path[:, 0, 1] = pos_init[1]
         # Direction in which the ant is currently facing (depends on the direction it came from).
         self.directions = d.DIR_NONE*np.ones(nb_ants, dtype=np.int8)
-        # self.sprites = []
-        # if(rank == 0):
-        # img = pg.image.load("ants.png").convert_alpha()
-        # for i in range(0, 32, 8):
-        #     self.sprites.append(pg.Surface.subsurface(img, i, 0, 8, 8))
+        self.sprites = []
+        img = pg.image.load("ants.png").convert_alpha()
+        for i in range(0, 32, 8):
+            self.sprites.append(pg.Surface.subsurface(img, i, 0, 8, 8))
 
     def return_to_nest(self, loaded_ants, pos_nest, food_counter):
         """
@@ -220,51 +208,27 @@ class Colony:
                          [has_north_exit[i], has_east_exit[i], has_west_exit[i], has_south_exit[i]]) for i in range(self.directions.shape[0])]
         return food_counter
 
-    # def display(self, screen):
-    #     [screen.blit(self.sprites[self.directions[i]], (8*self.historic_path[i, self.age[i], 1], 8*self.historic_path[i, self.age[i], 0])) for i in range(self.directions.shape[0])]
+    def display(self, screen):
+        [screen.blit(self.sprites[self.directions[i]], (8*self.historic_path[i, self.age[i], 1], 8*self.historic_path[i, self.age[i], 0])) for i in range(self.directions.shape[0])]
 
-# functions that replace the object methods
-def getColor_sent_pheromon(i: int, j: int, pheromon):
-    val = max(min(pheromon[i, j], 1), 0)
-    return [255*(val > 1.E-16), 255*val, 128.]
-
-def display_sent_pheromon(pheromon, screen):
-        [[screen.fill(getColor_sent_pheromon(i, j, pheromon), (8*(j-1), 8*(i-1), 8, 8)) for j in range(1, pheromon.shape[1]-1)] for i in range(1, pheromon.shape[0]-1)]
-
-def display_sent_ants(screen, sprites, directions, historic_path, age):
-    [screen.blit(sprites[directions[i]], (8*historic_path[i, age[i], 1], 8*historic_path[i, age[i], 0])) for i in range(directions.shape[0])]
 
 if __name__ == "__main__":
-
-    if(nbp != 2):
-        print("Select two processes for this exercice.")
-        exit(1)
-
     import sys
     import time
-
-    if(rank == 0):
-        pg.init()
-        
+    pg.init()
     size_laby = 25, 25
     if len(sys.argv) > 2:
         size_laby = int(sys.argv[1]),int(sys.argv[2])
 
-    if(rank == 0):
-        resolution = size_laby[1]*8, size_laby[0]*8
-        screen = pg.display.set_mode(resolution)
-
+    resolution = size_laby[1]*8, size_laby[0]*8
+    screen = pg.display.set_mode(resolution)
     nb_ants = size_laby[0]*size_laby[1]//4
     max_life = 500
-
     if len(sys.argv) > 3:
         max_life = int(sys.argv[3])
     pos_food = size_laby[0]-1, size_laby[1]-1
     pos_nest = 0, 0
-
-    a_maze = maze.Maze(size_laby, 12345, rank) 
-
-    # if(rank == 1):
+    a_maze = maze.Maze(size_laby, 12345)
     ants = Colony(nb_ants, pos_nest, max_life)
     unloaded_ants = np.array(range(nb_ants))
     alpha = 0.9
@@ -273,60 +237,35 @@ if __name__ == "__main__":
         alpha = float(sys.argv[4])
     if len(sys.argv) > 5:
         beta = float(sys.argv[5])
-
-    if(rank == 1):
-        pherom = pheromone.Pheromon(size_laby, pos_food, alpha, beta)
-        end_process = False
-    if(rank == 0):
-        mazeImg = a_maze.display(rank)
-        pherom = np.zeros((size_laby[0]+2, size_laby[1]+2), dtype=np.double)
+    pherom = pheromone.Pheromon(size_laby, pos_food, alpha, beta)
+    mazeImg = a_maze.display()
     food_counter = 0
-
-    if(rank == 0):
-        sprites = []
-        img = pg.image.load("ants.png").convert_alpha()
-        for i in range(0, 32, 8):
-            sprites.append(pg.Surface.subsurface(img, i, 0, 8, 8))
-
+    
+    deb_total = time.time()
     snapshop_taken = False
     while True:
-        if(rank == 0):
-            for event in pg.event.get():
-                if event.type == pg.QUIT:
-                    # end all processes
-                    pg.quit()
-                    globCom.send(True, dest=1)
-                    exit(0)
-
-            
-
-            # keep process 1
-            globCom.send(False, dest=1)
-
-            deb = time.time()
-            received = globCom.recv(source=1)
-            display_sent_pheromon(received[0], screen)
-            screen.blit(mazeImg, (0, 0))
-            display_sent_ants(screen, sprites, received[1], received[2], received[3])
-            # ants.display(screen)
-            pg.display.update()
-            end = time.time()
-            print(f"Affichage: FPS : {1./(end-deb):6.2f}, nourriture : {food_counter:7d}", end='\r')
-            food_counter = globCom.recv(source=1)
-            if food_counter == 1 and not snapshop_taken:
-                pg.image.save(screen, "MyFirstFood.png")
-                snapshop_taken = True
-
-        elif(rank == 1):
-            end_process = globCom.recv(source=0)
-            if(end_process):
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                pg.quit()
                 exit(0)
 
-            send_nd_array = np.array((pherom.pheromon, ants.directions, ants.historic_path, ants.age), dtype=object)
-            globCom.send(send_nd_array, dest=0)
-
-            food_counter = ants.advance(a_maze, pos_food, pos_nest, pherom, food_counter)
-            globCom.send(food_counter, dest=0)
-            pherom.do_evaporation(pos_food)
-        
-        pg.time.wait(500)
+        deb = time.time()
+        pherom.display(screen)
+        screen.blit(mazeImg, (0, 0))
+        ants.display(screen)
+        pg.display.update()
+                
+        food_counter = ants.advance(a_maze, pos_food, pos_nest, pherom, food_counter)
+        pherom.do_evaporation(pos_food)
+        end = time.time()
+        if food_counter == 1 and not snapshop_taken:
+            found_first_food = time.time()
+            pg.image.save(screen, "MyFirstFood.png")
+            snapshop_taken = True
+        # pg.time.wait(500)
+        print(f"FPS : {1./(end-deb):6.2f}, nourriture : {food_counter:7d}", end='\r')
+        if food_counter > 1000:
+            end_total = time.time()
+            print("Total time to find the first food:", found_first_food - deb_total)
+            print("Total time to find 1000 food:", end_total - deb_total)
+            exit(0)
