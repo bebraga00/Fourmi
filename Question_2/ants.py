@@ -259,13 +259,13 @@ if __name__ == "__main__":
 
     a_maze = maze.Maze(size_laby, 12345, rank) 
     # nb_ants = size_laby[0]*size_laby[1]//4
-    nb_ants_total = 12
+    nb_ants_total = 120
     nb_ants = nb_ants_total // (nbp - 1) # AJOUT
     max_life = 500
 
     if(rank == 0):
         mazeImg = a_maze.display(rank)
-        pherom = np.zeros((size_laby[0]+2, size_laby[1]+2), dtype=np.double)
+        # pherom = np.zeros((size_laby[0]+2, size_laby[1]+2), dtype=np.double)
         sprites = []
         img = pg.image.load("ants.png").convert_alpha()
         for i in range(0, 32, 8):
@@ -273,99 +273,95 @@ if __name__ == "__main__":
         deb_total = time.time()
 
     if(rank != 0):
-        
-
         if len(sys.argv) > 3:
             max_life = int(sys.argv[3])
-        pos_food = size_laby[0]-1, size_laby[1]-1
-        pos_nest = 0, 0
+        # pos_food = size_laby[0]-1, size_laby[1]-1
+        pos_nest = 0 + rank, 0 
 
         ants = Colony(nb_ants, pos_nest, max_life)
         unloaded_ants = np.array(range(nb_ants))
-        alpha = 0.9
-        beta  = 0.99
+
+        # alpha = 0.9 
+        # beta  = 0.99
         if len(sys.argv) > 4:
             alpha = float(sys.argv[4])
         if len(sys.argv) > 5:
             beta = float(sys.argv[5])
             
-        pherom = pheromone.Pheromon(size_laby, pos_food, alpha, beta)
+        # pherom = pheromone.Pheromon(size_laby, pos_food, alpha, beta)
         end_process = False
         food_counter = 0
+    
+        pos_food = size_laby[0]-1, size_laby[1]-1
+        alpha = 0.9 
+        beta  = 0.95
+        pherom = pheromone.Pheromon(size_laby, pos_food, alpha, beta)
 
+    # 
     while True:
         if(rank == 0):
-            
             for event in pg.event.get():
                 if event.type == pg.QUIT:
                     end_all_processes()
 
             for i in range(nbp - 1):
-                globCom.send(False, dest=i + 1) # CHANGE
+                globCom.send(False, dest=i + 1, tag=0) # CHANGE
             
             deb = time.time()
 
-            # historic_path_concatenated = np.zeros((nb_ants, max_life+1, 2), dtype=np.int16)
-
-            # received = globCom.recv(source=1) # DO A GATHER
             total_food_found = 0
-            directions_concatenated = np.array([], dtype=np.int8)
-            historic_path_concatenated = np.zeros((nb_ants, max_life+1, 2), dtype=np.int16)
-            age_concatenated = np.array([], dtype=np.int64)
-            received = []
+            pherom = np.zeros((size_laby[0]+2, size_laby[1]+2), dtype=np.double)
             for i in range(nbp - 1):
-                
-
-                
-                received.append(globCom.recv(source=(i + 1)))
-                
-                # print(type(received[i][1]), received[i][1])
-                # print(type(directions_concatenated), directions_concatenated)
-                directions_concatenated = np.concatenate((directions_concatenated, received[i][1]))
-                # historic_path_concatenated = np.concatenate((historic_path_concatenated, received[i][2]))
+                received = globCom.recv(source=(i + 1))
                 if(i == 0):
-                    print("if")
-                    historic_path_concatenated = received[i][2]
+                    sent_pheromon = received[0]
+                    directions_concatenated = received[1]
+                    historic_path_concatenated = received[2]
+                    age_concatenated = received[3]
                 else:
-                    print("else")
-                    historic_path_concatenated = np.concatenate((historic_path_concatenated, received[i][2]), axis=2)
-                age_concatenated = np.concatenate((age_concatenated, received[i][3]))
-                total_food_found += received[i][4]
-
-            display_sent_pheromon(received[0][0], screen) #CHANGER
-
-
+                    directions_concatenated = np.concatenate((directions_concatenated, received[1]))
+                    sent_pheromon += received[0]
+                    historic_path_concatenated = np.concatenate((historic_path_concatenated, received[2]), axis=0)
+                    age_concatenated = np.concatenate((age_concatenated, received[3]))
+                total_food_found += received[4]
+            
+            # pherom.pheromon = sent_pheromon
+            # pherom.do_evaporation(pos_food)
+            display_sent_pheromon(sent_pheromon, screen) #CHANGER
             screen.blit(mazeImg, (0, 0))
             display_sent_ants(screen, sprites, directions_concatenated, historic_path_concatenated, age_concatenated)
-            # for i in range(nbp - 1):
-            #     display_sent_ants(screen, sprites, received[i][1], received[i][2], received[i][3])
-            #     total_food_found += received[i][4]
             pg.display.update()
-
 
             end = time.time()
 
+            for i in range(nbp - 1):
+                globCom.send(sent_pheromon, dest=(i + 1), tag=1)
+
             print(f"Affichage: FPS : {1./(end-deb):6.2f}, nourriture : {total_food_found:7d}", end='\r')
-            # if received[4] == 1 and not snapshop_taken:
-            #     found_first_food = time.time()
-            #     pg.image.save(screen, "MyFirstFood.png")
-            #     snapshop_taken = True
+            if total_food_found >= 1 and not snapshop_taken:
+                found_first_food = time.time()
+                pg.image.save(screen, "MyFirstFood.png")
+                snapshop_taken = True
+                print("Total time to find the first food:", found_first_food - deb_total)
+                # end_all_processes()
             
-            # if received[4] > 1000:
+            # if total_food_found > 1000:
             #     end_total = time.time()
             #     print("Total time to find the first food:", found_first_food - deb_total)
             #     print("Total time to find 1000 food:", end_total - deb_total)
             #     end_all_processes()
 
         elif(rank != 0):
-            end_process = globCom.recv(source=0)
+            end_process = globCom.recv(source=0, tag=0)
             if(end_process):
                 exit(0)
             
+            food_counter = ants.advance(a_maze, pos_food, pos_nest, pherom, food_counter)            
             send_nd_array = np.array((pherom.pheromon, ants.directions, ants.historic_path, ants.age, food_counter), dtype=object)
+            pherom.do_evaporation(pos_food)
             globCom.send(send_nd_array, dest=0)
 
-            food_counter = ants.advance(a_maze, pos_food, pos_nest, pherom, food_counter)
-            pherom.do_evaporation(pos_food)
+            pherom.pheromon = globCom.recv(source=0, tag=1)
 
-        pg.time.wait(50)
+
+        # pg.time.wait(50)
