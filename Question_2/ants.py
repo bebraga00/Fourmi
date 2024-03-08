@@ -30,14 +30,14 @@ class Colony:
         pos_init : Initial positions of ants (anthill position)
         max_life : Maximum life that ants can reach
     """
-    def __init__(self, nb_ants, pos_init, max_life):
+    def __init__(self, nb_ants, pos_init, max_life, rank):
         # Each ant has is own unique random seed
         self.seeds = np.arange(1, nb_ants+1, dtype=np.int64)
         # State of each ant : loaded or unloaded
         self.is_loaded = np.zeros(nb_ants, dtype=np.int8)
         # Compute the maximal life amount for each ant :
         #   Updating the random seed :
-        self.seeds[:] = np.mod(16807*self.seeds[:], 2147483647)
+        self.seeds[:] = np.mod((16807 + rank)*self.seeds[:], 2147483647)
         # Amount of life for each ant = 75% à 100% of maximal ants life
         self.max_life = max_life * np.ones(nb_ants, dtype=np.int32)
         self.max_life -= np.int32(max_life*(self.seeds/2147483647.))//4
@@ -258,15 +258,14 @@ if __name__ == "__main__":
         snapshop_taken = False
 
     a_maze = maze.Maze(size_laby, 12345, rank) 
-    # nb_ants = size_laby[0]*size_laby[1]//4
-    nb_ants_total = 120
+    nb_ants_total = size_laby[0]*size_laby[1]//4
+    # nb_ants_total = 120
     nb_ants = nb_ants_total // (nbp - 1) # AJOUT
     max_life = 500
     pos_food = size_laby[0]-1, size_laby[1]-1
 
     if(rank == 0):
         mazeImg = a_maze.display(rank)
-        # pherom = np.zeros((size_laby[0]+2, size_laby[1]+2), dtype=np.double)
         sprites = []
         img = pg.image.load("ants.png").convert_alpha()
         for i in range(0, 32, 8):
@@ -276,29 +275,23 @@ if __name__ == "__main__":
     if(rank != 0):
         if len(sys.argv) > 3:
             max_life = int(sys.argv[3])
-        # pos_food = size_laby[0]-1, size_laby[1]-1
-        pos_nest = 0 + rank, 0 
+        pos_nest = 0, 0 
 
-        ants = Colony(nb_ants, pos_nest, max_life)
-        unloaded_ants = np.array(range(nb_ants))
+        ants = Colony(nb_ants, pos_nest, max_life, rank)
 
-        # alpha = 0.9 
-        # beta  = 0.99
         if len(sys.argv) > 4:
             alpha = float(sys.argv[4])
         if len(sys.argv) > 5:
             beta = float(sys.argv[5])
             
-        # pherom = pheromone.Pheromon(size_laby, pos_food, alpha, beta)
         end_process = False
         food_counter = 0
     
-        # pos_food = size_laby[0]-1, size_laby[1]-1
         alpha = 0.9 
         beta  = 0.99
         pherom = pheromone.Pheromon(size_laby, pos_food, alpha, beta)
 
-    # 
+    
     while True:
         if(rank == 0):
             for event in pg.event.get():
@@ -311,7 +304,6 @@ if __name__ == "__main__":
             deb = time.time()
 
             total_food_found = 0
-            # sent_pheromon = np.zeros((size_laby[0]+2, size_laby[1]+2), dtype=np.double)
             for i in range(nbp - 1):
                 received = globCom.recv(source=(i + 1))
                 if(i == 0):
@@ -321,15 +313,12 @@ if __name__ == "__main__":
                     age_concatenated = received[3]
                 else:
                     directions_concatenated = np.concatenate((directions_concatenated, received[1]))
-                    sent_pheromon += received[0]
+                    sent_pheromon = np.maximum(sent_pheromon, received[0])
                     historic_path_concatenated = np.concatenate((historic_path_concatenated, received[2]), axis=0)
                     age_concatenated = np.concatenate((age_concatenated, received[3]))
                 total_food_found += received[4]
 
-            sent_pheromon = sent_pheromon / np.max(sent_pheromon)
-            sent_pheromon[pos_food[0] + 1][pos_food[1] + 1] = 1
-            
-            display_sent_pheromon(sent_pheromon, screen) #CHANGER
+            display_sent_pheromon(sent_pheromon, screen) 
             screen.blit(mazeImg, (0, 0))
             display_sent_ants(screen, sprites, directions_concatenated, historic_path_concatenated, age_concatenated)
             pg.display.update()
@@ -360,7 +349,6 @@ if __name__ == "__main__":
             pherom.do_evaporation(pos_food)         
             send_nd_array = np.array((pherom.pheromon, ants.directions, ants.historic_path, ants.age, food_counter), dtype=object)
             globCom.send(send_nd_array, dest=0)
-            pherom.pheromon = globCom.recv(source=0, tag=1)
-            
+            pherom.set_pherom(globCom.recv(source=0, tag=1))            
 
         # pg.time.wait(50)

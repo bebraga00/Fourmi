@@ -337,4 +337,4 @@ if __name__ == "__main__":
             food_counter = ants.advance(a_maze, pos_food, pos_nest, pherom, food_counter)
             pherom.do_evaporation(pos_food)
 
-        # pg.time.wait(500)
+        pg.time.wait(50)

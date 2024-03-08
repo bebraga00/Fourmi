@@ -29,6 +29,9 @@ class Pheromon:
         pheromones = np.maximum(cells, 0.)
         self.pheromon[the_position[0]+1, the_position[1]+1] = self.alpha*np.max(pheromones) + (1-self.alpha)*0.25*pheromones.sum()
 
+    def set_pherom(self, pherom):
+        self.pheromon = pherom
+
     # def getColor(self, i: int, j: int):
     #     val = max(min(self.pheromon[i, j], 1), 0)
     #     return [255*(val > 1.E-16), 255*val, 128.]
